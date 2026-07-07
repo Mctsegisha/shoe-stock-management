@@ -1,0 +1,6 @@
+{
+  "name": "Shoes Stock Management Platform",
+  "description": "A comprehensive full-stack application to manage shoe products, variants, warehouses, suppliers, inventory levels, stock movements, and purchase orders.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -736,6 +736,7 @@ export default function App() {
               dbStatus={dbStatus}
               loading={actionLoading}
               onReconnect={handleDatabaseReconnect}
+              triggerToast={triggerToast}
             />
           )}
 

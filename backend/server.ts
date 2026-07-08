@@ -24,6 +24,13 @@ import {
   getEmailLogs,
   sendLowStockEmailSummary
 } from './notifications.ts';
+import {
+  getGeneralSettings,
+  saveGeneralSettings,
+  triggerBackup,
+  listBackups,
+  loadBackupContent
+} from './settings_store.ts';
 
 // ESM compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -1334,8 +1341,9 @@ app.get('/api/orders', async (req, res) => {
 // CREATE Purchase Order with items
 app.post('/api/orders', async (req, res) => {
   const { supplierId, orderNumber, items } = req.body; // items is array of { variantId, quantity, unitCost }
-  if (!supplierId || !orderNumber || !items || !Array.isArray(items) || items.length === 0) {
-    return sendError(res, 'Supplier, unique orderNumber, and a non-empty items array are required', 400);
+  const orderNo = orderNumber || `PO-${Math.floor(100000 + Math.random() * 900000)}`;
+  if (!supplierId || !orderNo || !items || !Array.isArray(items) || items.length === 0) {
+    return sendError(res, 'Supplier and a non-empty items array are required', 400);
   }
 
   if (!isUuid(supplierId)) {
@@ -1364,7 +1372,7 @@ app.post('/api/orders', async (req, res) => {
           VALUES ($1, $2, $3, $4, 'pending')
           RETURNING *
         `;
-        const orderRes = await client.query(insertOrderQ, [orderId, safeSupplierId, orderNumber, totalCost]);
+        const orderRes = await client.query(insertOrderQ, [orderId, safeSupplierId, orderNo, totalCost]);
 
         // Create Order Items
         for (const item of items) {
@@ -1377,7 +1385,46 @@ app.post('/api/orders', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        sendSuccess(res, orderRes.rows[0]);
+
+        // Fetch fully populated and mapped order to return
+        const orderRow = orderRes.rows[0];
+        const supRes = await pool.query('SELECT name FROM suppliers WHERE id = $1', [orderRow.supplier_id]);
+        const supplierName = supRes.rows.length > 0 ? supRes.rows[0].name : '';
+
+        const itemRes = await pool.query(`
+          SELECT oi.*, v.sku, v.size, v.color, p.name as product_name
+          FROM order_items oi
+          JOIN variants v ON oi.variant_id = v.id
+          JOIN products p ON v.product_id = p.id
+          WHERE oi.order_id = $1
+        `, [orderRow.id]);
+
+        const mappedOrder = {
+          id: orderRow.id,
+          supplierId: orderRow.supplier_id,
+          orderNumber: orderRow.order_number,
+          status: orderRow.status,
+          totalCost: parseFloat(orderRow.total_cost),
+          createdAt: orderRow.created_at,
+          updatedAt: orderRow.updated_at,
+          supplierName,
+          items: itemRes.rows.map((oi: any) => ({
+            id: oi.id,
+            orderId: oi.order_id,
+            variantId: oi.variant_id,
+            quantity: oi.quantity,
+            unitCost: parseFloat(oi.unit_cost),
+            variant: {
+              id: oi.variant_id,
+              sku: oi.sku,
+              size: oi.size,
+              color: oi.color,
+              productName: oi.product_name
+            }
+          }))
+        };
+
+        sendSuccess(res, mappedOrder);
       } catch (err: any) {
         await client.query('ROLLBACK');
         throw err;
@@ -1388,7 +1435,7 @@ app.post('/api/orders', async (req, res) => {
       const newOrder = {
         id: orderId,
         supplierId,
-        orderNumber,
+        orderNumber: orderNo,
         status: OrderStatus.PENDING,
         totalCost,
         createdAt: new Date().toISOString(),
@@ -1408,7 +1455,26 @@ app.post('/api/orders', async (req, res) => {
         });
       }
 
-      sendSuccess(res, newOrder);
+      const supplier = inMemoryDb.suppliers.find(s => s.id === supplierId);
+      const itemsList = inMemoryDb.orderItems
+        .filter(oi => oi.orderId === orderId)
+        .map(oi => {
+          const variant = inMemoryDb.variants.find(v => v.id === oi.variantId);
+          const product = variant ? inMemoryDb.products.find(p => p.id === variant.productId) : null;
+          return {
+            ...oi,
+            variant: variant ? {
+              ...variant,
+              productName: product?.name
+            } : undefined
+          };
+        });
+
+      sendSuccess(res, {
+        ...newOrder,
+        supplierName: supplier?.name,
+        items: itemsList
+      });
     }
   } catch (err: any) {
     sendError(res, err.message);
@@ -1473,7 +1539,46 @@ app.put('/api/orders/:id/status', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        sendSuccess(res, updateRes.rows[0]);
+
+        // Fetch fully populated and mapped order to return
+        const row = updateRes.rows[0];
+        const supRes = await pool.query('SELECT name FROM suppliers WHERE id = $1', [row.supplier_id]);
+        const supplierName = supRes.rows.length > 0 ? supRes.rows[0].name : '';
+
+        const itemRes = await pool.query(`
+          SELECT oi.*, v.sku, v.size, v.color, p.name as product_name
+          FROM order_items oi
+          JOIN variants v ON oi.variant_id = v.id
+          JOIN products p ON v.product_id = p.id
+          WHERE oi.order_id = $1
+        `, [row.id]);
+
+        const mappedOrder = {
+          id: row.id,
+          supplierId: row.supplier_id,
+          orderNumber: row.order_number,
+          status: row.status,
+          totalCost: parseFloat(row.total_cost),
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          supplierName,
+          items: itemRes.rows.map((oi: any) => ({
+            id: oi.id,
+            orderId: oi.order_id,
+            variantId: oi.variant_id,
+            quantity: oi.quantity,
+            unitCost: parseFloat(oi.unit_cost),
+            variant: {
+              id: oi.variant_id,
+              sku: oi.sku,
+              size: oi.size,
+              color: oi.color,
+              productName: oi.product_name
+            }
+          }))
+        };
+
+        sendSuccess(res, mappedOrder);
         triggerAutoNotificationCheck().catch(err => console.error('Auto notification check error:', err));
       } catch (err: any) {
         await client.query('ROLLBACK');
@@ -1517,7 +1622,27 @@ app.put('/api/orders/:id/status', async (req, res) => {
         }
       }
 
-      sendSuccess(res, inMemoryDb.orders[idx]);
+      const o = inMemoryDb.orders[idx];
+      const supplier = inMemoryDb.suppliers.find(s => s.id === o.supplierId);
+      const itemsList = inMemoryDb.orderItems
+        .filter(oi => oi.orderId === o.id)
+        .map(oi => {
+          const variant = inMemoryDb.variants.find(v => v.id === oi.variantId);
+          const product = variant ? inMemoryDb.products.find(p => p.id === variant.productId) : null;
+          return {
+            ...oi,
+            variant: variant ? {
+              ...variant,
+              productName: product?.name
+            } : undefined
+          };
+        });
+
+      sendSuccess(res, {
+        ...o,
+        supplierName: supplier?.name,
+        items: itemsList
+      });
       triggerAutoNotificationCheck().catch(err => console.error('Auto notification check error:', err));
     }
   } catch (err: any) {
@@ -1837,6 +1962,243 @@ app.post('/api/notifications/trigger', async (req, res) => {
     sendError(res, err.message);
   }
 });
+
+
+// ==========================================
+// 11. GENERAL SETTINGS & BACKUP/RESTORE/IMPORT
+// ==========================================
+
+app.get('/api/settings/general', (req, res) => {
+  try {
+    const settings = getGeneralSettings();
+    sendSuccess(res, settings);
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+app.post('/api/settings/general/:section', (req, res) => {
+  try {
+    const { section } = req.params;
+    const updated = saveGeneralSettings(section as any, req.body);
+    sendSuccess(res, updated);
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+app.get('/api/settings/backups', (req, res) => {
+  try {
+    const backups = listBackups();
+    sendSuccess(res, backups);
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+app.post('/api/settings/backups/create', async (req, res) => {
+  try {
+    const dump: any = {
+      isPostgres: isPostgresConnected && !!dbInstance,
+      timestamp: new Date().toISOString(),
+      data: {}
+    };
+
+    if (isPostgresConnected && dbInstance) {
+      // Fetch all tables
+      const client = dbInstance.session.client;
+      const tables = ['brands', 'products', 'variants', 'warehouses', 'suppliers', 'movements', 'sales', 'orders', 'order_items'];
+      for (const t of tables) {
+        const result = await client.query(`SELECT * FROM ${t}`);
+        dump.data[t] = result.rows;
+      }
+    } else {
+      dump.data = JSON.parse(JSON.stringify(inMemoryDb));
+    }
+
+    const backupResult = triggerBackup(dump);
+    sendSuccess(res, backupResult);
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+app.post('/api/settings/backups/restore', async (req, res) => {
+  try {
+    const { filename } = req.body;
+    if (!filename) {
+      return sendError(res, 'Backup filename is required', 400);
+    }
+
+    const dump = loadBackupContent(filename);
+    if (!dump || !dump.data) {
+      return sendError(res, 'Invalid backup file content', 400);
+    }
+
+    if (isPostgresConnected && dbInstance) {
+      const client = dbInstance.session.client;
+      await client.query('BEGIN');
+      try {
+        // Truncate tables with cascade or in correct order
+        await client.query('TRUNCATE TABLE order_items, orders, sales, movements, variants, products, suppliers, warehouses, brands CASCADE');
+
+        // Restore tables in foreign-key safe order
+        const tablesOrder = ['brands', 'suppliers', 'warehouses', 'products', 'variants', 'sales', 'movements', 'orders', 'order_items'];
+
+        for (const t of tablesOrder) {
+          const rows = dump.data[t];
+          if (!rows || rows.length === 0) continue;
+
+          for (const row of rows) {
+            const keys = Object.keys(row);
+            const values = Object.values(row);
+            const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+            const cols = keys.map(k => {
+              // Convert camelCase or standard field names if backup has them, but they should be pg snake_case.
+              // We'll keep them as is since the pg backup saves them as is.
+              return k;
+            }).join(', ');
+            
+            await client.query(`INSERT INTO ${t} (${cols}) VALUES (${placeholders})`, values);
+          }
+        }
+        await client.query('COMMIT');
+      } catch (dbErr: any) {
+        await client.query('ROLLBACK');
+        throw dbErr;
+      }
+    } else {
+      // Restore in memory
+      const keys = ['brands', 'products', 'variants', 'warehouses', 'suppliers', 'movements', 'sales', 'orders', 'order_items'];
+      for (const k of keys) {
+        if (dump.data[k]) {
+          (inMemoryDb as any)[k] = JSON.parse(JSON.stringify(dump.data[k]));
+        }
+      }
+    }
+
+    sendSuccess(res, { message: 'Database successfully restored from backup' });
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+app.get('/api/settings/export', async (req, res) => {
+  try {
+    let exportData: any = {};
+    if (isPostgresConnected && dbInstance) {
+      const client = dbInstance.session.client;
+      const tables = ['brands', 'products', 'variants', 'warehouses', 'suppliers', 'movements', 'sales', 'orders', 'order_items'];
+      for (const t of tables) {
+        const result = await client.query(`SELECT * FROM ${t}`);
+        exportData[t] = result.rows;
+      }
+    } else {
+      exportData = JSON.parse(JSON.stringify(inMemoryDb));
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=shoetracker_all_data_export.json');
+    res.send(JSON.stringify(exportData, null, 2));
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+app.post('/api/settings/import', async (req, res) => {
+  try {
+    const { products } = req.body;
+    if (!products || !Array.isArray(products)) {
+      return sendError(res, 'Products array is required', 400);
+    }
+
+    for (const item of products) {
+      const brandId = await getOrCreateBrandId(item.brandName || 'Generic');
+      const productId = generateId();
+
+      const productObj = {
+        id: productId,
+        name: item.name || 'Imported Shoe',
+        description: item.description || '',
+        brandId,
+        category: item.category || 'Casual',
+        gender: item.gender || 'Unisex',
+        basePrice: parseFloat(item.basePrice) || 100,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (isPostgresConnected && dbInstance) {
+        const client = dbInstance.session.client;
+        await client.query(`
+          INSERT INTO products (id, name, description, brand_id, category, gender, base_price, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `, [productObj.id, productObj.name, productObj.description, productObj.brandId, productObj.category, productObj.gender, productObj.basePrice, productObj.createdAt, productObj.updatedAt]);
+      } else {
+        inMemoryDb.products.push(productObj);
+      }
+
+      const vars = item.variants || [{ size: 40, color: 'Black', price: productObj.basePrice, currentStock: 10 }];
+      for (const v of vars) {
+        const variantId = generateId();
+        const sku = v.sku || `${productObj.name.substring(0, 3).toUpperCase()}-${v.size}-${v.color.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+        const barcode = v.barcode || `${Math.floor(100000000000 + Math.random() * 900000000000)}`;
+
+        const variantObj = {
+          id: variantId,
+          productId,
+          size: parseInt(v.size) || 40,
+          color: v.color || 'Black',
+          sku,
+          currentStock: parseInt(v.currentStock) || 0,
+          barcode,
+          price: parseFloat(v.price) || productObj.basePrice,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        if (isPostgresConnected && dbInstance) {
+          const client = dbInstance.session.client;
+          await client.query(`
+            INSERT INTO variants (id, product_id, size, color, sku, current_stock, barcode, price, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          `, [variantObj.id, variantObj.productId, variantObj.size, variantObj.color, variantObj.sku, variantObj.currentStock, variantObj.barcode, variantObj.price, variantObj.createdAt, variantObj.updatedAt]);
+        } else {
+          inMemoryDb.variants.push(variantObj);
+        }
+      }
+    }
+
+    sendSuccess(res, { message: `${products.length} products successfully imported!` });
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+async function getOrCreateBrandId(brandName: string): Promise<string> {
+  if (isPostgresConnected && dbInstance) {
+    const client = dbInstance.session.client;
+    const res = await client.query('SELECT id FROM brands WHERE LOWER(name) = LOWER($1)', [brandName]);
+    if (res.rows.length > 0) {
+      return res.rows[0].id;
+    }
+    const newId = generateId();
+    await client.query('INSERT INTO brands (id, name, created_at) VALUES ($1, $2, $3)', [newId, brandName, new Date().toISOString()]);
+    return newId;
+  } else {
+    const brand = inMemoryDb.brands.find(b => b.name.toLowerCase() === brandName.toLowerCase());
+    if (brand) {
+      return brand.id;
+    }
+    const newId = generateId();
+    inMemoryDb.brands.push({
+      id: newId,
+      name: brandName,
+      createdAt: new Date().toISOString()
+    });
+    return newId;
+  }
+}
 
 
 // ==========================================

@@ -80,10 +80,8 @@ export default function SuppliersView({
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this supplier profile?')) {
-      await onDeleteSupplier(id);
-      onRefresh();
-    }
+    await onDeleteSupplier(id);
+    onRefresh();
   };
 
   return (

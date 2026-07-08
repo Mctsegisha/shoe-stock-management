@@ -75,10 +75,8 @@ export default function WarehousesView({
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this store/warehouse?')) {
-      await onDeleteWarehouse(id);
-      onRefresh();
-    }
+    await onDeleteWarehouse(id);
+    onRefresh();
   };
 
   return (

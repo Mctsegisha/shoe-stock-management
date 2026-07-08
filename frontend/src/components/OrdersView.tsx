@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { 
   ClipboardList, 
   Plus, 
@@ -36,6 +36,18 @@ export default function OrdersView({
 }: OrdersViewProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+
+  // Keep selectedOrder in sync with the parent orders list (to handle status updates/fetches)
+  useEffect(() => {
+    if (selectedOrder) {
+      const current = orders.find(o => o.id === selectedOrder.id);
+      if (current) {
+        setSelectedOrder(current);
+      } else {
+        setSelectedOrder(null);
+      }
+    }
+  }, [orders]);
 
   // New purchase order form
   const [supplierId, setSupplierId] = useState('');
@@ -83,10 +95,11 @@ export default function OrdersView({
   };
 
   const handleUpdateStatus = async (id: string, status: OrderStatus) => {
-    if (confirm(`Change this purchase order status to ${status.toUpperCase()}?`)) {
-      await onUpdateOrderStatus(id, status);
-      onRefresh();
+    const updated = await onUpdateOrderStatus(id, status);
+    if (updated) {
+      setSelectedOrder(updated);
     }
+    onRefresh();
   };
 
   return (
@@ -141,7 +154,7 @@ export default function OrdersView({
                       <Clock className="w-2.5 h-2.5" />
                       {o.status}
                     </span>
-                    <p className="text-slate-900 text-xs font-black mt-2.5">ETB {o.totalCost.toLocaleString()}</p>
+                    <p className="text-slate-900 text-xs font-black mt-2.5">ETB {(o.totalCost ?? 0).toLocaleString()}</p>
                   </div>
                 </div>
 
@@ -185,7 +198,7 @@ export default function OrdersView({
               <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl">
                 <div>
                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Value</p>
-                  <p className="font-extrabold text-xs text-slate-800 mt-0.5">ETB {selectedOrder.totalCost.toLocaleString()}</p>
+                  <p className="font-extrabold text-xs text-slate-800 mt-0.5">ETB {(selectedOrder.totalCost ?? 0).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Items Ordered</p>

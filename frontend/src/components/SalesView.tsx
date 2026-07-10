@@ -5,7 +5,6 @@ import {
   Search, 
   Clock, 
   DollarSign, 
-  TrendingUp, 
   RefreshCw, 
   X,
   Package,
@@ -116,14 +115,14 @@ export default function SalesView({
       <div className="flex justify-between items-center bg-white p-4 border border-slate-100 rounded-2xl shadow-sm/50">
         <div>
           <h3 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">POS Sales Terminal</h3>
-          <p className="text-[10px] text-slate-400 font-medium mt-0.5">Record customer sales transactions and calculate shoe retail profits instantly</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-0.5">Record customer sales transactions and view pricing details instantly</p>
         </div>
 
         <div className="flex gap-2">
           <button onClick={onRefresh} className="p-2 border border-slate-100 hover:bg-slate-50 text-slate-500 rounded-xl transition-colors">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={handleOpenCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
+          <button onClick={handleOpenCreate} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
             <Plus className="w-4 h-4" /> Record New Sale
           </button>
         </div>
@@ -144,9 +143,8 @@ export default function SalesView({
                 <th className="p-4">Shoe Model</th>
                 <th className="p-4">Size / Color</th>
                 <th className="p-4 text-center">Pairs Sold</th>
-                <th className="p-4">Selling Price</th>
-                <th className="p-4">Estimated Cost</th>
-                <th className="p-4 text-emerald-700">Net Profit</th>
+                <th className="p-4">Unit Price</th>
+                <th className="p-4 text-primary font-extrabold">Total Price</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
@@ -167,18 +165,15 @@ export default function SalesView({
                   <td className="p-4 font-bold text-slate-700">
                     ETB {sale.sellingPrice.toLocaleString()}
                   </td>
-                  <td className="p-4 text-slate-400 font-bold">
-                    ETB {sale.costPrice.toLocaleString()}
-                  </td>
-                  <td className="p-4 font-black text-emerald-600">
-                    +ETB {sale.profit.toLocaleString()}
+                  <td className="p-4 font-black text-primary">
+                    ETB {(sale.quantity * sale.sellingPrice).toLocaleString()}
                   </td>
                 </tr>
               ))}
 
               {sales.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-12 text-center text-slate-400 font-semibold bg-white">
+                  <td colSpan={6} className="p-12 text-center text-slate-400 font-semibold bg-white">
                     <ShoppingBag className="w-10 h-10 text-slate-200 mx-auto mb-3" />
                     No sales receipts recorded yet. Click &quot;Record New Sale&quot; to register a sale.
                   </td>
@@ -249,7 +244,7 @@ export default function SalesView({
                     min={1}
                     value={quantity}
                     onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -261,40 +256,26 @@ export default function SalesView({
                     min={0}
                     value={sellingPrice}
                     onChange={(e) => setSellingPrice(Math.max(0, parseFloat(e.target.value) || 0))}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
               </div>
 
-              {/* PROFIT CALCULATOR SUMMARY CARD */}
+              {/* TRANSACTION PRICING SUMMARY CARD */}
               {selectedVariant && (
                 <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2.5">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Interactive Profit Projection</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Transaction Summary</p>
                   
-                  <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <p className="text-[10px] text-slate-400 font-bold">Estimated Cost</p>
-                      <p className="font-extrabold text-slate-700 mt-0.5">ETB {unitCost.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-bold">Unit Profit</p>
-                      <p className={`font-extrabold mt-0.5 ${unitProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        ETB {unitProfit.toLocaleString()} ({profitPercentage.toFixed(1)}%)
-                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold">Unit Price</p>
+                      <p className="font-extrabold text-slate-700 mt-0.5">ETB {sellingPrice.toLocaleString()}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] text-slate-400 font-bold">Total Gain</p>
-                      <p className={`font-black mt-0.5 text-indigo-600`}>
-                        ETB {totalSaleValue.toLocaleString()}
-                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold">Total Price</p>
+                      <p className="font-black text-primary mt-0.5 text-sm">ETB {totalSaleValue.toLocaleString()}</p>
                     </div>
-                  </div>
-
-                  {/* Profit estimate bar */}
-                  <div className="pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold text-slate-700">
-                    <span className="flex items-center gap-1"><TrendingUp className="w-4 h-4 text-emerald-500" /> Estimated Net Profit:</span>
-                    <span className="text-emerald-600 font-black">ETB {totalProfit.toLocaleString()}</span>
                   </div>
                 </div>
               )}
@@ -320,7 +301,7 @@ export default function SalesView({
                 <button 
                   type="submit" 
                   disabled={recording}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors"
+                  className="px-5 py-2 bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-primary-foreground rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors"
                 >
                   {recording ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShoppingBag className="w-3.5 h-3.5" />}
                   Record Sale

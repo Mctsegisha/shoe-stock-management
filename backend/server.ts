@@ -108,6 +108,198 @@ app.post('/api/status/reconnect', async (req, res) => {
 });
 
 // ==========================================
+// 1.5. AUTHENTICATION & ROLE-BASED LOGIN
+// ==========================================
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return sendError(res, 'Email and password are required', 400);
+  }
+
+  let user: any = null;
+  if (isPostgresConnected && dbInstance) {
+    const pool = dbInstance.session.client;
+    try {
+      const userRes = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND password = $2', [email, password]);
+      if (userRes.rows.length > 0) {
+        const row = userRes.rows[0];
+        user = { id: row.id, name: row.name, email: row.email, role: row.role };
+      }
+    } catch (e: any) {
+      console.error('Database login query error:', e);
+    }
+  } 
+  
+  // Fallback to inMemoryDb or if Postgres query failed/yielded nothing
+  if (!user) {
+    const found = inMemoryDb.users.find((u: any) => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+    if (found) {
+      user = { id: found.id, name: found.name, email: found.email, role: found.role };
+    }
+  }
+
+  if (!user) {
+    return sendError(res, 'Invalid email or password', 401);
+  }
+
+  const settings = getGeneralSettings();
+  const roleObj = settings.usersPermissions?.roles?.find((r: any) => r.name === user.role);
+  const permissions = roleObj ? roleObj.permissions : [];
+
+  sendSuccess(res, { user, permissions });
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  const userId = req.headers['x-user-id'] as string;
+  if (!userId) {
+    return sendError(res, 'Not authenticated', 401);
+  }
+  
+  let user: any = null;
+  if (isPostgresConnected && dbInstance) {
+    const pool = dbInstance.session.client;
+    try {
+      const userRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+      if (userRes.rows.length > 0) {
+        const row = userRes.rows[0];
+        user = { id: row.id, name: row.name, email: row.email, role: row.role };
+      }
+    } catch (e: any) {
+      console.error('Database user check error:', e);
+    }
+  }
+  
+  if (!user) {
+    const found = inMemoryDb.users.find((u: any) => u.id === userId);
+    if (found) {
+      user = { id: found.id, name: found.name, email: found.email, role: found.role };
+    }
+  }
+
+  if (!user) {
+    return sendError(res, 'User not found', 404);
+  }
+
+  const settings = getGeneralSettings();
+  const roleObj = settings.usersPermissions?.roles?.find((r: any) => r.name === user.role);
+  const permissions = roleObj ? roleObj.permissions : [];
+
+  sendSuccess(res, { user, permissions });
+});
+
+// ==========================================
+// 1.6. TEAM USER MANAGEMENT
+// ==========================================
+app.get('/api/users', async (req, res) => {
+  try {
+    const requestingUserId = req.headers['x-user-id'] as string;
+    let requestingUser: any = null;
+    if (isPostgresConnected && dbInstance) {
+      const userRes = await dbInstance.session.client.query('SELECT * FROM users WHERE id = $1', [requestingUserId]);
+      if (userRes.rows.length > 0) requestingUser = userRes.rows[0];
+    } else {
+      requestingUser = inMemoryDb.users.find((u: any) => u.id === requestingUserId);
+    }
+
+    if (!requestingUser || requestingUser.role !== 'Admin') {
+      return sendError(res, 'Unauthorized. Only business owner/admin can manage users.', 403);
+    }
+
+    let allUsers: any[] = [];
+    if (isPostgresConnected && dbInstance) {
+      const result = await dbInstance.session.client.query('SELECT id, name, email, role, created_at FROM users ORDER BY name ASC');
+      allUsers = result.rows;
+    } else {
+      allUsers = inMemoryDb.users.map((u: any) => ({ id: u.id, name: u.name, email: u.email, role: u.role }));
+    }
+    sendSuccess(res, allUsers);
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  try {
+    const requestingUserId = req.headers['x-user-id'] as string;
+    let requestingUser: any = null;
+    if (isPostgresConnected && dbInstance) {
+      const userRes = await dbInstance.session.client.query('SELECT * FROM users WHERE id = $1', [requestingUserId]);
+      if (userRes.rows.length > 0) requestingUser = userRes.rows[0];
+    } else {
+      requestingUser = inMemoryDb.users.find((u: any) => u.id === requestingUserId);
+    }
+
+    if (!requestingUser || requestingUser.role !== 'Admin') {
+      return sendError(res, 'Unauthorized. Only business owner/admin can manage users.', 403);
+    }
+
+    const { name, email, password, role } = req.body;
+    if (!name || !email || !password || !role) {
+      return sendError(res, 'All fields (name, email, password, role) are required', 400);
+    }
+
+    let existingUser = false;
+    if (isPostgresConnected && dbInstance) {
+      const checkRes = await dbInstance.session.client.query('SELECT 1 FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+      existingUser = checkRes.rows.length > 0;
+    } else {
+      existingUser = inMemoryDb.users.some((u: any) => u.email.toLowerCase() === email.toLowerCase());
+    }
+
+    if (existingUser) {
+      return sendError(res, 'User with this email already exists', 400);
+    }
+
+    const id = generateId();
+    let newUser: any = null;
+    if (isPostgresConnected && dbInstance) {
+      const q = 'INSERT INTO users (id, name, email, password, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, created_at';
+      const result = await dbInstance.session.client.query(q, [id, name, email, password, role]);
+      newUser = result.rows[0];
+    } else {
+      newUser = { id, name, email, password, role };
+      inMemoryDb.users.push(newUser);
+    }
+
+    sendSuccess(res, { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role });
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const requestingUserId = req.headers['x-user-id'] as string;
+    let requestingUser: any = null;
+    if (isPostgresConnected && dbInstance) {
+      const userRes = await dbInstance.session.client.query('SELECT * FROM users WHERE id = $1', [requestingUserId]);
+      if (userRes.rows.length > 0) requestingUser = userRes.rows[0];
+    } else {
+      requestingUser = inMemoryDb.users.find((u: any) => u.id === requestingUserId);
+    }
+
+    if (!requestingUser || requestingUser.role !== 'Admin') {
+      return sendError(res, 'Unauthorized. Only business owner/admin can manage users.', 403);
+    }
+
+    const targetUserId = req.params.id;
+    if (targetUserId === requestingUserId) {
+      return sendError(res, 'Cannot delete yourself', 400);
+    }
+
+    if (isPostgresConnected && dbInstance) {
+      await dbInstance.session.client.query('DELETE FROM users WHERE id = $1', [targetUserId]);
+    } else {
+      inMemoryDb.users = inMemoryDb.users.filter((u: any) => u.id !== targetUserId);
+    }
+
+    sendSuccess(res, { message: 'User deleted successfully' });
+  } catch (err: any) {
+    sendError(res, err.message);
+  }
+});
+
+// ==========================================
 // 2. DASHBOARD STATS
 // ==========================================
 app.get('/api/stats', async (req, res) => {
@@ -207,11 +399,29 @@ app.get('/api/stats', async (req, res) => {
         value: parseInt(row.value) || 0
       }));
 
-      // Profit-related queries for stats in Postgres
-      const profitRes = await pool.query('SELECT SUM(profit) as total_profit, SUM(quantity * selling_price) as total_revenue FROM sales');
-      const dailyProfitRes = await pool.query("SELECT SUM(profit) as daily_profit FROM sales WHERE created_at >= NOW() - INTERVAL '1 day'");
-      const weeklyProfitRes = await pool.query("SELECT SUM(profit) as weekly_profit FROM sales WHERE created_at >= NOW() - INTERVAL '7 days'");
-      const monthlyProfitRes = await pool.query("SELECT SUM(profit) as monthly_profit FROM sales WHERE created_at >= NOW() - INTERVAL '30 days'");
+      // Profit & Revenue-related queries for stats in Postgres
+      const salesStatsRes = await pool.query(`
+        SELECT 
+          COALESCE(SUM(quantity * selling_price), 0) as total_revenue,
+          COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '1 day' THEN quantity * selling_price ELSE 0 END), 0) as daily_revenue,
+          COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN quantity * selling_price ELSE 0 END), 0) as weekly_revenue,
+          COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN quantity * selling_price ELSE 0 END), 0) as monthly_revenue,
+          COALESCE(SUM(profit), 0) as total_profit,
+          COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '1 day' THEN profit ELSE 0 END), 0) as daily_profit,
+          COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN profit ELSE 0 END), 0) as weekly_profit,
+          COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN profit ELSE 0 END), 0) as monthly_profit
+        FROM sales
+      `);
+
+      const totalRevenue = parseFloat(salesStatsRes.rows[0].total_revenue) || 0;
+      const dailyRevenue = parseFloat(salesStatsRes.rows[0].daily_revenue) || 0;
+      const weeklyRevenue = parseFloat(salesStatsRes.rows[0].weekly_revenue) || 0;
+      const monthlyRevenue = parseFloat(salesStatsRes.rows[0].monthly_revenue) || 0;
+
+      const totalProfit = parseFloat(salesStatsRes.rows[0].total_profit) || 0;
+      const dailyProfit = parseFloat(salesStatsRes.rows[0].daily_profit) || 0;
+      const weeklyProfit = parseFloat(salesStatsRes.rows[0].weekly_profit) || 0;
+      const monthlyProfit = parseFloat(salesStatsRes.rows[0].monthly_profit) || 0;
 
       const bestSellersRes = await pool.query(`
         SELECT p.name, b.name as brand, SUM(s.quantity) as quantity, SUM(s.quantity * s.selling_price) as revenue, SUM(s.profit) as profit
@@ -232,10 +442,7 @@ app.get('/api/stats', async (req, res) => {
         ORDER BY date ASC
       `);
 
-      const totalProfit = parseFloat(profitRes.rows[0].total_profit) || 0;
-      const dailyProfit = parseFloat(dailyProfitRes.rows[0].daily_profit) || 0;
-      const weeklyProfit = parseFloat(weeklyProfitRes.rows[0].weekly_profit) || 0;
-      const monthlyProfit = parseFloat(monthlyProfitRes.rows[0].monthly_profit) || 0;
+
 
       const bestSellers = bestSellersRes.rows.map((row: any) => ({
         name: row.name,
@@ -274,6 +481,10 @@ app.get('/api/stats', async (req, res) => {
         warehouseUtilization,
         recentMovements,
         brandDistribution,
+        totalRevenue,
+        dailyRevenue,
+        weeklyRevenue,
+        monthlyRevenue,
         totalProfit,
         dailyProfit,
         weeklyProfit,
@@ -349,15 +560,28 @@ app.get('/api/stats', async (req, res) => {
         return { name: b.name, value };
       });
 
-      // Compute in-memory profit statistics
+      // Compute in-memory revenue and profit statistics
+      const totalRevenue = inMemoryDb.sales.reduce((sum, s) => sum + (s.quantity * s.sellingPrice), 0);
       const totalProfit = inMemoryDb.sales.reduce((sum, s) => sum + Number(s.profit), 0);
       const nowMs = Date.now();
+
+      const dailyRevenue = inMemoryDb.sales
+        .filter(s => nowMs - new Date(s.createdAt).getTime() <= 24 * 3600 * 1000)
+        .reduce((sum, s) => sum + (s.quantity * s.sellingPrice), 0);
       const dailyProfit = inMemoryDb.sales
         .filter(s => nowMs - new Date(s.createdAt).getTime() <= 24 * 3600 * 1000)
         .reduce((sum, s) => sum + Number(s.profit), 0);
+
+      const weeklyRevenue = inMemoryDb.sales
+        .filter(s => nowMs - new Date(s.createdAt).getTime() <= 7 * 24 * 3600 * 1000)
+        .reduce((sum, s) => sum + (s.quantity * s.sellingPrice), 0);
       const weeklyProfit = inMemoryDb.sales
         .filter(s => nowMs - new Date(s.createdAt).getTime() <= 7 * 24 * 3600 * 1000)
         .reduce((sum, s) => sum + Number(s.profit), 0);
+
+      const monthlyRevenue = inMemoryDb.sales
+        .filter(s => nowMs - new Date(s.createdAt).getTime() <= 30 * 24 * 3600 * 1000)
+        .reduce((sum, s) => sum + (s.quantity * s.sellingPrice), 0);
       const monthlyProfit = inMemoryDb.sales
         .filter(s => nowMs - new Date(s.createdAt).getTime() <= 30 * 24 * 3600 * 1000)
         .reduce((sum, s) => sum + Number(s.profit), 0);
@@ -417,6 +641,10 @@ app.get('/api/stats', async (req, res) => {
         warehouseUtilization,
         recentMovements,
         brandDistribution,
+        totalRevenue,
+        dailyRevenue,
+        weeklyRevenue,
+        monthlyRevenue,
         totalProfit,
         dailyProfit,
         weeklyProfit,

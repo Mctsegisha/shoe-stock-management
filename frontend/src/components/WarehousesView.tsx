@@ -93,7 +93,7 @@ export default function WarehousesView({
           <button onClick={onRefresh} className="p-2 border border-slate-100 hover:bg-slate-50 text-slate-500 rounded-xl transition-colors">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={handleOpenCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
+          <button onClick={handleOpenCreate} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
             <Plus className="w-4 h-4" /> Add Outlet Shop
           </button>
         </div>
@@ -112,7 +112,7 @@ export default function WarehousesView({
                     <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[9px] font-extrabold rounded tracking-wider uppercase font-mono">{w.code}</span>
                     <h4 className="text-sm font-black text-slate-900 mt-2">{w.name}</h4>
                   </div>
-                  <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                  <div className="p-2 bg-primary/10 text-primary rounded-xl">
                     <Building className="w-4 h-4" />
                   </div>
                 </div>
@@ -130,7 +130,7 @@ export default function WarehousesView({
                   <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                     <div 
                       className={`h-full rounded-full transition-all duration-500 ${
-                        percentage > 90 ? 'bg-rose-500' : percentage > 75 ? 'bg-amber-500' : 'bg-blue-500'
+                        percentage > 90 ? 'bg-rose-500' : percentage > 75 ? 'bg-amber-500' : 'bg-primary'
                       }`}
                       style={{ width: `${percentage}%` }}
                     />
@@ -182,7 +182,7 @@ export default function WarehousesView({
                   placeholder="e.g. Bole Road Retail Shop"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
               </div>
 
@@ -196,7 +196,7 @@ export default function WarehousesView({
                     disabled={!!editingWarehouse}
                     value={form.code}
                     onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-slate-50 disabled:text-slate-400"
                   />
                 </div>
 
@@ -208,7 +208,7 @@ export default function WarehousesView({
                     min={1}
                     value={form.capacity}
                     onChange={(e) => setForm({ ...form, capacity: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -221,7 +221,7 @@ export default function WarehousesView({
                   placeholder="e.g. Addis Ababa, Bole District"
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
               </div>
 
@@ -229,7 +229,7 @@ export default function WarehousesView({
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 transition-colors">
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
+                <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors">
                   {editingWarehouse ? 'Save Shop Profile' : 'Configure Outlet'}
                 </button>
               </div>

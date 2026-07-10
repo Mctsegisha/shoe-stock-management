@@ -3,6 +3,7 @@ import {
   Building, Sliders, Users, Tags, Coins, Bell, Link, Database, Lock,
   Plus, Trash2, RefreshCw, AlertTriangle, Download, Upload, Check, AlertCircle, Save
 } from 'lucide-react';
+import { UserSession } from '../types.ts';
 
 interface SettingsViewProps {
   dbStatus: {
@@ -14,11 +15,22 @@ interface SettingsViewProps {
   loading: boolean;
   onReconnect: () => Promise<void>;
   triggerToast?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  session?: UserSession | null;
+  currentTheme?: 'light' | 'dark';
+  onThemeToggle?: (theme: 'light' | 'dark') => void;
 }
 
 type TabType = 'profile' | 'inventory' | 'users' | 'categories' | 'pricing' | 'notifications' | 'integrations' | 'backup' | 'security';
 
-export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect, triggerToast }: SettingsViewProps) {
+export default function SettingsView({ 
+  dbStatus, 
+  loading: dbLoading, 
+  onReconnect, 
+  triggerToast, 
+  session,
+  currentTheme = 'light',
+  onThemeToggle
+}: SettingsViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [saving, setSaving] = useState(false);
   
@@ -37,6 +49,11 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [backupsList, setBackupsList] = useState<any[]>([]);
+  
+  // Real platform users list for owner's direct registration & management
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  const [newUserForm, setNewUserForm] = useState({ name: '', email: '', password: '', role: 'Sales Staff' });
+  const [addingUser, setAddingUser] = useState(false);
   
   // UI Helpers
   const [newColor, setNewColor] = useState('');
@@ -62,7 +79,105 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
     fetchLocations();
     fetchSuppliers();
     fetchBackups();
-  }, []);
+    if (session?.user?.id) {
+      fetchUsers();
+    }
+  }, [session]);
+
+  const fetchUsers = async () => {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.user?.id) {
+        headers['x-user-id'] = session.user.id;
+      }
+      const r = await fetch('/api/users', { headers });
+      const contentType = r.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await r.text();
+        const cleanText = text.substring(0, 100).replace(/<[^>]*>/g, '').trim();
+        throw new Error(`Non-JSON response (${r.status}): ${cleanText || 'HTML Page'}`);
+      }
+      const d = await r.json();
+      if (d.success) {
+        setRegisteredUsers(d.data || []);
+      } else {
+        console.error('Failed to fetch users:', d.error);
+      }
+    } catch (e: any) {
+      console.error('Error fetching registered users', e);
+      triggerToast?.(`Error loading users: ${e.message}`, 'error');
+    }
+  };
+
+  const handleAddNewUser = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newUserForm.name || !newUserForm.email || !newUserForm.password || !newUserForm.role) {
+      triggerToast?.('Please fill in all user details', 'error');
+      return;
+    }
+    setAddingUser(true);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.user?.id) {
+        headers['x-user-id'] = session.user.id;
+      }
+      const r = await fetch('/api/users', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(newUserForm)
+      });
+      const contentType = r.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await r.text();
+        const cleanText = text.substring(0, 100).replace(/<[^>]*>/g, '').trim();
+        throw new Error(`Non-JSON response (${r.status}): ${cleanText || 'HTML Page'}`);
+      }
+      const d = await r.json();
+      if (d.success) {
+        triggerToast?.('New user registered successfully', 'success');
+        setNewUserForm({ name: '', email: '', password: '', role: 'Sales Staff' });
+        fetchUsers();
+      } else {
+        triggerToast?.(d.error || 'Failed to add user', 'error');
+      }
+    } catch (err: any) {
+      triggerToast?.(err.message, 'error');
+    } finally {
+      setAddingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (id === session?.user?.id) {
+      triggerToast?.('You cannot delete your own session user account', 'error');
+      return;
+    }
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.user?.id) {
+        headers['x-user-id'] = session.user.id;
+      }
+      const r = await fetch(`/api/users/${id}`, {
+        method: 'DELETE',
+        headers
+      });
+      const contentType = r.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await r.text();
+        const cleanText = text.substring(0, 100).replace(/<[^>]*>/g, '').trim();
+        throw new Error(`Non-JSON response (${r.status}): ${cleanText || 'HTML Page'}`);
+      }
+      const d = await r.json();
+      if (d.success) {
+        triggerToast?.('User deleted from platform', 'success');
+        fetchUsers();
+      } else {
+        triggerToast?.(d.error || 'Failed to delete user', 'error');
+      }
+    } catch (err: any) {
+      triggerToast?.(err.message, 'error');
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -396,14 +511,14 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-3 px-3.5 py-3 text-left rounded-xl transition-all shrink-0 md:shrink ${
                 isActive 
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/15' 
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/15' 
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+              <Icon className={`w-4 h-4 ${isActive ? 'text-primary-foreground' : 'text-slate-400'}`} />
               <div className="hidden md:block">
                 <p className="text-xs font-black tracking-wide">{tab.label}</p>
-                <p className={`text-[10px] mt-0.5 font-medium ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>{tab.desc}</p>
+                <p className={`text-[10px] mt-0.5 font-medium ${isActive ? 'text-primary-foreground/80' : 'text-slate-400'}`}>{tab.desc}</p>
               </div>
               <span className="md:hidden text-xs font-bold px-1">{tab.label}</span>
             </button>
@@ -412,14 +527,42 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
       </div>
 
       {/* CONTENT PANEL */}
-      <div className="flex-1 bg-white rounded-2xl border border-slate-100 p-5 md:p-8 shadow-sm">
+      <div className="flex-1 bg-card text-foreground rounded-2xl border border-border p-5 md:p-8 shadow-sm transition-colors duration-200">
         
         {/* TAB 1: BUSINESS PROFILE */}
         {activeTab === 'profile' && (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-black text-slate-950">Business Profile</h3>
-              <p className="text-xs text-slate-400 font-semibold mt-1">Configure your corporate branding, currency display format, and operating nodes</p>
+              <h3 className="text-lg font-black text-foreground">Business Profile &amp; Preferences</h3>
+              <p className="text-xs text-muted-foreground font-semibold mt-1">Configure your corporate branding, currency display format, operating nodes, and visual interface theme</p>
+            </div>
+
+            {/* THEME TOGGLE SWITCH */}
+            <div className="bg-muted/40 border border-border rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-colors duration-200">
+              <div>
+                <h4 className="text-sm font-black text-foreground">Visual Appearance</h4>
+                <p className="text-xs text-muted-foreground font-semibold mt-0.5">Toggle between Light and Dark interface themes for your session</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-black transition-colors ${currentTheme === 'light' ? 'text-primary font-extrabold' : 'text-muted-foreground'}`}>Light Mode</span>
+                <button
+                  onClick={() => onThemeToggle?.(currentTheme === 'light' ? 'dark' : 'light')}
+                  className={`relative inline-flex h-6.5 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                    currentTheme === 'dark' ? 'bg-primary' : 'bg-muted-foreground/30'
+                  }`}
+                  role="switch"
+                  aria-checked={currentTheme === 'dark'}
+                  aria-label="Toggle dark mode"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-5.5 w-5.5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      currentTheme === 'dark' ? 'translate-x-5.5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+                <span className={`text-xs font-black transition-colors ${currentTheme === 'dark' ? 'text-primary font-extrabold' : 'text-muted-foreground'}`}>Dark Mode</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -429,7 +572,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="text" 
                   value={profile.shopName}
                   onChange={e => setProfile({ ...profile, shopName: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 />
               </div>
               <div className="space-y-1">
@@ -439,7 +582,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   placeholder="https://example.com/logo.png"
                   value={profile.logoUrl}
                   onChange={e => setProfile({ ...profile, logoUrl: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 />
               </div>
               <div className="space-y-1">
@@ -448,7 +591,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="text" 
                   value={profile.address}
                   onChange={e => setProfile({ ...profile, address: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 />
               </div>
               <div className="space-y-1">
@@ -457,7 +600,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="text" 
                   value={profile.phone}
                   onChange={e => setProfile({ ...profile, phone: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 />
               </div>
               <div className="space-y-1 md:col-span-2">
@@ -466,7 +609,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="email" 
                   value={profile.email}
                   onChange={e => setProfile({ ...profile, email: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 />
               </div>
 
@@ -475,7 +618,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                 <select 
                   value={profile.currency}
                   onChange={e => setProfile({ ...profile, currency: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 >
                   <option value="ETB">ETB (Ethiopian Birr)</option>
                   <option value="USD">USD ($)</option>
@@ -488,7 +631,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                 <select 
                   value={profile.dateFormat}
                   onChange={e => setProfile({ ...profile, dateFormat: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 >
                   <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 07/15/2026)</option>
                   <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 15/07/2026)</option>
@@ -500,7 +643,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
             <button
               onClick={() => handleSaveSection('profile', profile)}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Save className="w-3.5 h-3.5" /> Save Business Profile
             </button>
@@ -579,7 +722,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="number" 
                   value={inventory.globalThreshold}
                   onChange={e => setInventory({ ...inventory, globalThreshold: parseInt(e.target.value) || 0 })}
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:border-blue-500 ${
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary ${
                     validationErrors.globalThreshold ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200'
                   }`}
                 />
@@ -596,7 +739,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="text" 
                   value={inventory.skuPrefix}
                   onChange={e => setInventory({ ...inventory, skuPrefix: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold"
                 />
               </div>
 
@@ -695,7 +838,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
             <button
               onClick={() => handleSaveSection('inventory', inventory)}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Save className="w-3.5 h-3.5" /> Save Inventory Rules
             </button>
@@ -707,11 +850,11 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-black text-slate-950">Staff &amp; Role Permissions</h3>
-              <p className="text-xs text-slate-400 font-semibold mt-1">Manage platform authorization, roles, email invitations, and view audit toggles</p>
+              <p className="text-xs text-slate-400 font-semibold mt-1">Manage platform authorization, roles, active user registrations, and view audit toggles</p>
             </div>
 
             {/* ROLE PERMISSIONS MATRIX */}
-            <div className="border border-slate-100 rounded-xl overflow-hidden">
+            <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
               <div className="bg-slate-50 p-3 border-b border-slate-100">
                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">System Permission Matrix</h4>
               </div>
@@ -749,7 +892,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                                   const updatedRoles = users.roles.map(ur => ur.name === r.name ? { ...ur, permissions: list } : ur);
                                   setUsers({ ...users, roles: updatedRoles });
                                 }}
-                                className="w-4.5 h-4.5 text-blue-600 rounded border-slate-300"
+                                className="w-4.5 h-4.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                               />
                             </td>
                           );
@@ -764,63 +907,139 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
             <button
               onClick={() => handleSaveSection('users', users)}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Save className="w-3.5 h-3.5" /> Save Permissions Matrix
             </button>
 
-            {/* SEND INVITES SECTION */}
-            <div className="pt-6 border-t border-slate-100 space-y-4">
-              <div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Invite Team Members</h4>
-                <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Send setup link to register secondary personnel directly</p>
-              </div>
-
-              <div className="flex gap-3 max-w-md">
-                <input 
-                  type="email" 
-                  placeholder="name@shoetracker.com"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold"
-                />
-                <select 
-                  value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value)}
-                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
-                >
-                  <option value="Admin">Admin</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Sales Staff">Sales Staff</option>
-                  <option value="Warehouse Staff">Warehouse Staff</option>
-                </select>
-                <button 
-                  onClick={handleSendInvite}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold"
-                >
-                  Send Invite
-                </button>
-              </div>
-
-              {/* PENDING INVITES */}
-              {users.invites?.length > 0 && (
-                <div className="bg-slate-50/50 border rounded-xl divide-y divide-slate-100">
-                  {users.invites.map(inv => (
-                    <div key={inv.id} className="p-3 flex items-center justify-between text-xs font-semibold">
-                      <div>
-                        <p className="text-slate-800 font-bold">{inv.emailOrPhone}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Role: <span className="font-extrabold text-slate-600">{inv.role}</span> • Invited: {inv.invitedAt}</p>
-                      </div>
-                      <button 
-                        onClick={() => handleCancelInvite(inv.id)}
-                        className="text-slate-400 hover:text-rose-600 font-bold text-[11px]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ))}
+            {/* DIRECT USER REGISTRATION (ADD USER IN SETTINGS) */}
+            <div className="pt-6 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Add User Form */}
+              <div className="lg:col-span-1 space-y-4 bg-white p-4 border border-slate-100 rounded-xl shadow-sm">
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Register New User</h4>
+                  <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Create registered credentials for active system staff directly</p>
                 </div>
-              )}
+
+                <form onSubmit={handleAddNewUser} className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. John Doe"
+                      value={newUserForm.name}
+                      onChange={e => setNewUserForm({ ...newUserForm, name: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Email Address</label>
+                    <input 
+                      type="email" 
+                      placeholder="name@shoetracker.com"
+                      value={newUserForm.email}
+                      onChange={e => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Password</label>
+                    <input 
+                      type="password" 
+                      placeholder="••••••••"
+                      value={newUserForm.password}
+                      onChange={e => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1">Role Type</label>
+                    <select 
+                      value={newUserForm.role}
+                      onChange={e => setNewUserForm({ ...newUserForm, role: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Admin">Admin (Owner)</option>
+                      <option value="Manager">Manager</option>
+                      <option value="Sales Staff">Sales Staff</option>
+                      <option value="Warehouse Staff">Warehouse Staff</option>
+                    </select>
+                  </div>
+
+                  <button 
+                    type="submit"
+                    disabled={addingUser}
+                    className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                  >
+                    {addingUser ? 'Registering...' : 'Register User'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Registered Users List */}
+              <div className="lg:col-span-2 space-y-4">
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Registered Team Users</h4>
+                  <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Currently registered accounts on the database</p>
+                </div>
+
+                <div className="border border-slate-100 rounded-xl overflow-hidden bg-white shadow-sm">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b bg-slate-50">
+                        <th className="p-3 font-extrabold text-slate-700">Name</th>
+                        <th className="p-3 font-extrabold text-slate-700">Email</th>
+                        <th className="p-3 font-extrabold text-slate-700">Role</th>
+                        <th className="p-3 font-extrabold text-slate-700 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {registeredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-4 text-center text-slate-400 font-semibold">
+                            Loading registered users...
+                          </td>
+                        </tr>
+                      ) : (
+                        registeredUsers.map(u => (
+                          <tr key={u.id} className="hover:bg-slate-50/50">
+                            <td className="p-3 font-bold text-slate-800">{u.name}</td>
+                            <td className="p-3 text-slate-500">{u.email}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                u.role === 'Admin' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
+                                u.role === 'Manager' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                u.role === 'Sales Staff' ? 'bg-green-50 text-green-700 border border-green-100' :
+                                'bg-slate-50 text-slate-700 border border-slate-100'
+                              }`}>
+                                {u.role === 'Admin' ? 'Owner (Admin)' : u.role}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              {u.id === session?.user?.id ? (
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider px-2">You</span>
+                              ) : (
+                                <button
+                                  onClick={() => handleDeleteUser(u.id)}
+                                  className="text-rose-600 hover:text-rose-800 hover:underline text-xs font-bold"
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -953,7 +1172,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
             <button
               onClick={() => handleSaveSection('categories', categories)}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Save className="w-3.5 h-3.5" /> Save Categories &amp; Customs
             </button>
@@ -975,7 +1194,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="number" 
                   value={pricing.defaultMarkup}
                   onChange={e => setPricing({ ...pricing, defaultMarkup: parseFloat(e.target.value) || 0 })}
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:border-blue-500 ${
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary ${
                     validationErrors.defaultMarkup ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200'
                   }`}
                 />
@@ -992,7 +1211,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="number" 
                   value={pricing.vatRate}
                   onChange={e => setPricing({ ...pricing, vatRate: parseFloat(e.target.value) || 0 })}
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:border-blue-500 ${
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary ${
                     validationErrors.vatRate ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200'
                   }`}
                 />
@@ -1007,7 +1226,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                   type="number" 
                   value={pricing.maxDiscount}
                   onChange={e => setPricing({ ...pricing, maxDiscount: parseFloat(e.target.value) || 0 })}
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:border-blue-500 ${
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs font-bold focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary ${
                     validationErrors.maxDiscount ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200'
                   }`}
                 />
@@ -1035,7 +1254,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
             <button
               onClick={() => handleSaveSection('pricing', pricing)}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Save className="w-3.5 h-3.5" /> Save Pricing &amp; Tax Settings
             </button>
@@ -1124,7 +1343,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
             <button
               onClick={() => handleSaveSection('notifications', notifications)}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Save className="w-3.5 h-3.5" /> Save Notification Channels
             </button>
@@ -1212,7 +1431,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                 placeholder="https://yourdomain.com/api/webhooks"
                 value={integrations.webhookUrl}
                 onChange={e => setIntegrations({ ...integrations, webhookUrl: e.target.value })}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold"
               />
               <p className="text-[10px] text-slate-400 font-semibold">Sends direct automated JSON payload on stock changes</p>
             </div>
@@ -1220,7 +1439,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
             <button
               onClick={() => handleSaveSection('integrations', integrations)}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Save className="w-3.5 h-3.5" /> Save Integrations
             </button>
@@ -1367,7 +1586,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                     <button 
                       onClick={handleExecuteImport}
                       disabled={saving}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black"
+                      className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-xs font-black"
                     >
                       Execute Import to Database
                     </button>
@@ -1392,7 +1611,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                 <select 
                   value={security.minPasswordLength}
                   onChange={e => setSecurity({ ...security, minPasswordLength: parseInt(e.target.value) || 8 })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 >
                   <option value={6}>6 Characters</option>
                   <option value={8}>8 Characters (Recommended)</option>
@@ -1406,7 +1625,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
                 <select 
                   value={security.sessionTimeout}
                   onChange={e => setSecurity({ ...security, sessionTimeout: e.target.value as any })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl text-xs font-bold transition-all"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-bold transition-all"
                 >
                   <option value="15min">15 Minutes</option>
                   <option value="30min">30 Minutes</option>
@@ -1445,7 +1664,7 @@ export default function SettingsView({ dbStatus, loading: dbLoading, onReconnect
             <button
               onClick={() => handleSaveSection('security', security)}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors"
             >
               <Save className="w-3.5 h-3.5" /> Save Security Policy
             </button>

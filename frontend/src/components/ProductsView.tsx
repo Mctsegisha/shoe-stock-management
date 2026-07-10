@@ -31,6 +31,7 @@ interface ProductsViewProps {
   onCreateVariant: (data: any) => Promise<any>;
   onUpdateVariant: (id: string, data: any) => Promise<any>;
   onDeleteVariant: (id: string) => Promise<any>;
+  userPermissions?: string[];
 }
 
 export default function ProductsView({
@@ -43,8 +44,11 @@ export default function ProductsView({
   onDeleteProduct,
   onCreateVariant,
   onUpdateVariant,
-  onDeleteVariant
+  onDeleteVariant,
+  userPermissions = []
 }: ProductsViewProps) {
+  const canEdit = userPermissions.length === 0 || userPermissions.includes('edit_stock');
+  const canDelete = userPermissions.length === 0 || userPermissions.includes('delete_products');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [selectedGender, setSelectedGender] = useState('all');
@@ -254,7 +258,7 @@ export default function ProductsView({
       color: '',
       sku: `${product.name.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
       currentStock: 0,
-      barcode: '',
+      barcode: Math.floor(100000000000 + Math.random() * 900000000000).toString(),
       price: product.basePrice
     });
     setIsVariantModalOpen(true);
@@ -320,7 +324,7 @@ export default function ProductsView({
               placeholder="Search shoe names, designs..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 focus:outline-none focus:border-blue-500 rounded-xl text-xs font-medium"
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-medium"
             />
           </div>
 
@@ -380,9 +384,11 @@ export default function ProductsView({
           <button onClick={onRefresh} className="p-2 border border-slate-100 hover:bg-slate-50 text-slate-500 rounded-xl transition-colors bg-white">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={handleOpenProductCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
-            <Plus className="w-4 h-4" /> Add Shoe Product
-          </button>
+          {canEdit && (
+            <button onClick={handleOpenProductCreate} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
+              <Plus className="w-4 h-4" /> Add Shoe Product
+            </button>
+          )}
         </div>
       </div>
 
@@ -394,7 +400,7 @@ export default function ProductsView({
             onClick={() => setTableType('products')}
             className={`px-4 py-2 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all ${
               tableType === 'products'
-                ? 'bg-blue-50 text-blue-700 border border-blue-100 shadow-sm/50'
+                ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm/50'
                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 border border-transparent'
             }`}
           >
@@ -405,7 +411,7 @@ export default function ProductsView({
             onClick={() => setTableType('variants')}
             className={`px-4 py-2 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all ${
               tableType === 'variants'
-                ? 'bg-blue-50 text-blue-700 border border-blue-100 shadow-sm/50'
+                ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm/50'
                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 border border-transparent'
             }`}
           >
@@ -441,15 +447,21 @@ export default function ProductsView({
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => handleOpenVariantCreate(product)} className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-extrabold shadow-sm flex items-center gap-1 transition-colors">
-                        <Plus className="w-3 h-3" /> Size/Variant
-                      </button>
-                      <button onClick={() => handleOpenProductEdit(product)} className="p-1.5 hover:bg-slate-100 text-slate-500 rounded-lg transition-colors">
-                        <Edit className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => handleDeleteProd(product.id)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canEdit && (
+                        <>
+                          <button onClick={() => handleOpenVariantCreate(product)} className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-extrabold shadow-sm flex items-center gap-1 transition-colors">
+                            <Plus className="w-3 h-3" /> Size/Variant
+                          </button>
+                          <button onClick={() => handleOpenProductEdit(product)} className="p-1.5 hover:bg-slate-100 text-slate-500 rounded-lg transition-colors">
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                      {canDelete && (
+                        <button onClick={() => handleDeleteProd(product.id)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -809,7 +821,7 @@ export default function ProductsView({
                     value={prodForm.name}
                     onChange={(e) => setProdForm({ ...prodForm, name: e.target.value })}
                     placeholder="e.g. Nike Air Force 1"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -834,7 +846,7 @@ export default function ProductsView({
                     min={0}
                     value={prodForm.basePrice}
                     onChange={(e) => setProdForm({ ...prodForm, basePrice: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -846,7 +858,7 @@ export default function ProductsView({
                     value={prodForm.category}
                     onChange={(e) => setProdForm({ ...prodForm, category: e.target.value })}
                     placeholder="e.g. Running, Casual"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -871,7 +883,7 @@ export default function ProductsView({
                     onChange={(e) => setProdForm({ ...prodForm, description: e.target.value })}
                     placeholder="Brief description of cushioning, style, premium leather..."
                     rows={3}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -881,7 +893,7 @@ export default function ProductsView({
                 <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 transition-colors">
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
+                <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors">
                   {editingProduct ? 'Save Changes' : 'Create Shoe Profile'}
                 </button>
               </div>
@@ -916,7 +928,7 @@ export default function ProductsView({
                     placeholder="e.g. 9, 10, 42"
                     value={varForm.size}
                     onChange={(e) => setVarForm({ ...varForm, size: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -928,7 +940,7 @@ export default function ProductsView({
                     placeholder="e.g. Triple Black, Royal"
                     value={varForm.color}
                     onChange={(e) => setVarForm({ ...varForm, color: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -939,7 +951,7 @@ export default function ProductsView({
                     required
                     value={varForm.sku}
                     onChange={(e) => setVarForm({ ...varForm, sku: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -951,18 +963,27 @@ export default function ProductsView({
                     min={0}
                     value={varForm.price}
                     onChange={(e) => setVarForm({ ...varForm, price: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Barcode</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Barcode</label>
+                    <button
+                      type="button"
+                      onClick={() => setVarForm({ ...varForm, barcode: Math.floor(100000000000 + Math.random() * 900000000000).toString() })}
+                      className="text-[10px] text-primary hover:underline font-bold focus:outline-none"
+                    >
+                      Generate New
+                    </button>
+                  </div>
                   <input 
                     type="text" 
                     placeholder="EAN/UPC Number"
                     value={varForm.barcode}
                     onChange={(e) => setVarForm({ ...varForm, barcode: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -974,7 +995,7 @@ export default function ProductsView({
                     min={0}
                     value={varForm.currentStock}
                     onChange={(e) => setVarForm({ ...varForm, currentStock: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -984,7 +1005,7 @@ export default function ProductsView({
                 <button type="button" onClick={() => setIsVariantModalOpen(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 transition-colors">
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
+                <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors">
                   {editingVariant ? 'Save Variant' : 'Add Size to Catalog'}
                 </button>
               </div>

@@ -116,7 +116,7 @@ export default function OrdersView({
           <button onClick={onRefresh} className="p-2 border border-slate-100 hover:bg-slate-50 text-slate-500 rounded-xl transition-colors">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={handleOpenCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
+          <button onClick={handleOpenCreate} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
             <Plus className="w-4 h-4" /> Create Purchase Order
           </button>
         </div>
@@ -134,7 +134,7 @@ export default function OrdersView({
                 key={o.id} 
                 onClick={() => setSelectedOrder(o)}
                 className={`p-4 border rounded-2xl shadow-sm/50 hover:shadow-sm cursor-pointer transition-all ${
-                  selectedOrder?.id === o.id ? 'bg-blue-50/20 border-blue-400' : 'bg-white border-slate-100'
+                  selectedOrder?.id === o.id ? 'bg-primary/5 border-primary/30' : 'bg-white border-slate-100'
                 }`}
               >
                 <div className="flex justify-between items-start">
@@ -231,7 +231,7 @@ export default function OrdersView({
                   {selectedOrder.status === OrderStatus.PENDING && (
                     <button 
                       onClick={() => handleUpdateStatus(selectedOrder.id, OrderStatus.SHIPPED)}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
+                      className="w-full py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold transition-colors shadow-sm"
                     >
                       Mark as Shipped
                     </button>
@@ -358,7 +358,7 @@ export default function OrdersView({
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 transition-colors">
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
+                <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors">
                   Place Order with Supplier
                 </button>
               </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { 
   TrendingUp, 
   Package, 
@@ -7,7 +8,8 @@ import {
   ArrowUpRight, 
   ArrowDownRight, 
   Inbox,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -29,9 +31,18 @@ interface DashboardViewProps {
   onNavigate: (tab: string) => void;
 }
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1'];
+const COLORS = [
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+  'var(--primary)'
+];
 
 export default function DashboardView({ stats, loading, onNavigate }: DashboardViewProps) {
+  const [isLowStockModalOpen, setIsLowStockModalOpen] = useState(false);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
@@ -79,13 +90,13 @@ export default function DashboardView({ stats, loading, onNavigate }: DashboardV
               <p className="text-slate-400 text-[10px] font-bold tracking-wider uppercase">Total Inventory Stock</p>
               <h3 className="text-2xl font-extrabold text-slate-900 mt-1.5">{totalStock.toLocaleString()} <span className="text-xs font-semibold text-slate-400">pairs</span></h3>
             </div>
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+            <div className="p-2.5 bg-primary/10 text-primary rounded-xl">
               <Package className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
             <span className="text-slate-400 text-[10px] font-medium">Aggregate items across shops</span>
-            <button onClick={() => onNavigate('products')} className="text-blue-600 text-[10px] font-bold hover:underline flex items-center gap-0.5">
+            <button onClick={() => onNavigate('products')} className="text-primary text-[10px] font-bold hover:underline flex items-center gap-0.5">
               Manage Shoes <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -107,36 +118,44 @@ export default function DashboardView({ stats, loading, onNavigate }: DashboardV
           </div>
         </div>
 
-        <div className={`p-5 border rounded-2xl shadow-sm/50 transition-colors ${
-          lowStockCount > 0 ? 'bg-amber-50/40 border-amber-100' : 'bg-white border-slate-100'
-        }`}>
+        <div 
+          onClick={() => setIsLowStockModalOpen(true)}
+          className={`p-5 border rounded-2xl shadow-sm/50 cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 ${
+            lowStockCount > 0 ? 'bg-amber-50/40 border-amber-100 hover:bg-amber-50/70' : 'bg-white border-slate-100 hover:bg-slate-50'
+          }`}
+          title="Click to see which items are low stock"
+        >
           <div className="flex justify-between items-start">
             <div>
               <p className="text-slate-400 text-[10px] font-bold tracking-wider uppercase">Low Stock Warnings</p>
               <h3 className={`text-2xl font-extrabold mt-1.5 ${lowStockCount > 0 ? 'text-amber-600' : 'text-slate-900'}`}>{lowStockCount} <span className="text-xs font-semibold text-slate-400">variants</span></h3>
             </div>
-            <div className={`p-2.5 rounded-xl ${lowStockCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-50 text-slate-400'}`}>
+            <div className={`p-2.5 rounded-xl ${lowStockCount > 0 ? 'bg-amber-100 text-amber-700 animate-pulse' : 'bg-slate-50 text-slate-400'}`}>
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-            <span className="text-slate-400 text-[10px] font-medium">Under critical alert threshold</span>
-            {lowStockCount > 0 && <span className="text-amber-700 text-[10px] font-bold">Needs restock soon</span>}
+            <span className="text-slate-400 text-[10px] font-medium">Under alert threshold</span>
+            {lowStockCount > 0 ? (
+              <span className="text-amber-700 text-[10px] font-black underline decoration-dashed">View low stock items</span>
+            ) : (
+              <span className="text-emerald-600 text-[10px] font-bold">All levels healthy</span>
+            )}
           </div>
         </div>
 
         <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-sm/50">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-400 text-[10px] font-bold tracking-wider uppercase">Total Recorded Profit</p>
-              <h3 className="text-2xl font-extrabold text-indigo-600 mt-1.5">ETB {totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+              <p className="text-slate-400 text-[10px] font-bold tracking-wider uppercase">Total Sales Revenue</p>
+              <h3 className="text-2xl font-extrabold text-indigo-600 mt-1.5">ETB {(stats.totalRevenue ?? totalProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
             </div>
             <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-            <span className="text-slate-400 text-[10px] font-medium">Daily: ETB {dailyProfit.toLocaleString()}</span>
+            <span className="text-slate-400 text-[10px] font-medium">Daily: ETB {(stats.dailyRevenue ?? dailyProfit).toLocaleString()}</span>
             <button onClick={() => onNavigate('sales')} className="text-indigo-600 text-[10px] font-bold hover:underline flex items-center gap-0.5">
               Sales Hub <ArrowRight className="w-3 h-3" />
             </button>
@@ -162,24 +181,24 @@ export default function DashboardView({ stats, loading, onNavigate }: DashboardV
                 <AreaChart data={revenueHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0}/>
                     </linearGradient>
                     <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} tickLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={9} tickLine={false} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={9} tickLine={false} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', color: '#fff' }}
-                    labelStyle={{ fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}
-                    itemStyle={{ fontSize: '11px', padding: '1px 0' }}
+                    contentStyle={{ backgroundColor: 'var(--card)', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--foreground)' }}
+                    labelStyle={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--muted-foreground)' }}
+                    itemStyle={{ fontSize: '11px', padding: '1px 0', color: 'var(--foreground)' }}
                   />
-                  <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
-                  <Area type="monotone" dataKey="profit" name="Profit" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorProfit)" />
+                  <Area type="monotone" dataKey="revenue" name="Revenue" stroke="var(--chart-1)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
+                  <Area type="monotone" dataKey="profit" name="Profit" stroke="var(--chart-2)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorProfit)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -214,8 +233,8 @@ export default function DashboardView({ stats, loading, onNavigate }: DashboardV
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: 'none', color: '#fff' }}
-                    itemStyle={{ fontSize: '10px' }}
+                    contentStyle={{ backgroundColor: 'var(--card)', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--foreground)' }}
+                    itemStyle={{ fontSize: '10px', color: 'var(--foreground)' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -302,7 +321,7 @@ export default function DashboardView({ stats, loading, onNavigate }: DashboardV
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                     <div 
                       className={`h-full rounded-full transition-all duration-500 ${
-                        percentage > 90 ? 'bg-rose-500' : percentage > 75 ? 'bg-amber-500' : 'bg-blue-500'
+                        percentage > 90 ? 'bg-rose-500' : percentage > 75 ? 'bg-amber-500' : 'bg-primary'
                       }`}
                       style={{ width: `${percentage}%` }}
                     />
@@ -325,7 +344,7 @@ export default function DashboardView({ stats, loading, onNavigate }: DashboardV
             <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">Recent Stock Movements</h4>
             <p className="text-[10px] text-slate-400 font-medium mt-0.5">Live stock transfer, purchase receipt, and outgoing audit trail</p>
           </div>
-          <button onClick={() => onNavigate('movements')} className="text-blue-600 text-[10px] font-bold hover:underline flex items-center gap-0.5">
+          <button onClick={() => onNavigate('movements')} className="text-primary text-[10px] font-bold hover:underline flex items-center gap-0.5">
             Audit Trail <ArrowRight className="w-3 h-3" />
           </button>
         </div>
@@ -351,7 +370,7 @@ export default function DashboardView({ stats, loading, onNavigate }: DashboardV
                     <span className={`px-2 py-0.5 rounded-md font-extrabold text-[9px] uppercase tracking-wide ${
                       mv.type === 'incoming' ? 'bg-emerald-50 text-emerald-600' :
                       mv.type === 'outgoing' ? 'bg-rose-50 text-rose-600' :
-                      mv.type === 'transfer' ? 'bg-blue-50 text-blue-600' :
+                      mv.type === 'transfer' ? 'bg-primary/10 text-primary' :
                       'bg-slate-100 text-slate-600'
                     }`}>
                       {mv.type}
@@ -372,6 +391,85 @@ export default function DashboardView({ stats, loading, onNavigate }: DashboardV
           </table>
         </div>
       </div>
+
+      {/* LOW STOCK ITEMS MODAL */}
+      {isLowStockModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                  <AlertTriangle className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">Low Stock Inventory</h3>
+                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">Variants currently below critical threshold</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsLowStockModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 max-h-96 overflow-y-auto divide-y divide-slate-100">
+              {lowStockVariants.length > 0 ? (
+                lowStockVariants.map((item) => (
+                  <div key={item.id} className="py-3 flex justify-between items-center text-xs">
+                    <div>
+                      <p className="font-extrabold text-slate-800">{item.productName}</p>
+                      <p className="text-[10px] font-bold text-slate-400 mt-1">
+                        Brand: <span className="text-slate-600 font-extrabold">{item.productBrand}</span> • Size: <span className="text-slate-600 font-extrabold">{item.size}</span> • Color: <span className="text-slate-600 font-extrabold">{item.color}</span>
+                      </p>
+                      <p className="text-[10px] font-mono text-slate-400 mt-0.5">SKU: {item.sku}</p>
+                    </div>
+                    <div className="text-right shrink-0 ml-4">
+                      <span className={`px-2.5 py-1 rounded-full font-black text-[9px] tracking-wider ${
+                        item.currentStock === 0 
+                          ? 'bg-rose-100 text-rose-700 font-black' 
+                          : item.currentStock <= 3
+                          ? 'bg-amber-100 text-amber-700 font-bold'
+                          : 'bg-yellow-50 text-yellow-700 font-semibold'
+                      }`}>
+                        {item.currentStock === 0 ? 'OUT OF STOCK' : `${item.currentStock} PAIRS LEFT`}
+                      </span>
+                      <p className="text-[10px] font-extrabold text-slate-500 mt-1.5">ETB {item.price.toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="py-12 text-center">
+                  <Package className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                  <p className="text-slate-400 text-xs font-semibold">Perfect! No items are currently low on stock.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2 justify-end">
+              <button 
+                onClick={() => setIsLowStockModalOpen(false)}
+                className="px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-bold text-[10px] tracking-wider uppercase transition-colors"
+              >
+                Close
+              </button>
+              <button 
+                onClick={() => {
+                  setIsLowStockModalOpen(false);
+                  onNavigate('products');
+                }}
+                className="px-4 py-2 bg-primary hover:bg-primary/95 text-primary-foreground rounded-xl font-bold text-[10px] tracking-wider uppercase transition-colors"
+              >
+                Manage Inventory
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

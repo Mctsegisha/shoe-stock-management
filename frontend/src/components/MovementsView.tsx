@@ -131,7 +131,7 @@ export default function MovementsView({
               placeholder="Search by SKU, product name..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 focus:outline-none focus:border-blue-500 rounded-xl text-xs font-medium"
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-xs font-medium"
             />
           </div>
 
@@ -166,7 +166,7 @@ export default function MovementsView({
           <button onClick={onRefresh} className="p-2 border border-slate-100 hover:bg-slate-50 text-slate-500 rounded-xl transition-colors">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={handleOpenCreate} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
+          <button onClick={handleOpenCreate} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors">
             <Plus className="w-4 h-4" /> Move Stock / Adjust
           </button>
         </div>
@@ -211,7 +211,7 @@ export default function MovementsView({
                     <span className={`px-2.5 py-0.5 rounded-full font-extrabold text-[9px] uppercase tracking-wide inline-flex items-center gap-1 ${
                       mv.type === 'incoming' ? 'bg-emerald-100 text-emerald-800' :
                       mv.type === 'outgoing' ? 'bg-rose-100 text-rose-800' :
-                      mv.type === 'transfer' ? 'bg-blue-100 text-blue-800' :
+                      mv.type === 'transfer' ? 'bg-primary/10 text-primary' :
                       'bg-slate-100 text-slate-700'
                     }`}>
                       {mv.type === 'incoming' && <ArrowDownRight className="w-2.5 h-2.5" />}
@@ -270,7 +270,7 @@ export default function MovementsView({
                       onClick={() => handleTypeChange(btn.type)}
                       className={`py-2 px-1 border text-[10px] font-bold rounded-lg transition-colors text-center ${
                         form.type === btn.type
-                          ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                          ? 'bg-primary border-primary text-primary-foreground shadow-sm'
                           : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
                       }`}
                     >
@@ -339,7 +339,7 @@ export default function MovementsView({
                     min={1}
                     value={form.quantity}
                     onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -351,7 +351,7 @@ export default function MovementsView({
                     placeholder="e.g. Supplier stock, periodic manual counts, damage loss"
                     value={form.reason}
                     onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
@@ -361,7 +361,7 @@ export default function MovementsView({
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-600 transition-colors">
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors">
+                <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold shadow-sm transition-colors">
                   Execute Stock Operation
                 </button>
               </div>

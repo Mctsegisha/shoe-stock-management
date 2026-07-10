@@ -135,6 +135,10 @@ export interface DashboardStats {
   warehouseUtilization: { name: string; capacity: number; used: number }[];
   recentMovements: Movement[];
   brandDistribution: { name: string; value: number }[];
+  totalRevenue?: number;
+  dailyRevenue?: number;
+  weeklyRevenue?: number;
+  monthlyRevenue?: number;
   totalProfit: number;
   dailyProfit: number;
   weeklyProfit: number;
@@ -152,5 +156,17 @@ export interface Sale {
   profit: number;
   createdAt: string;
   variant?: Variant;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface UserSession {
+  user: User;
+  permissions: string[];
 }
 

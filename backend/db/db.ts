@@ -38,7 +38,11 @@ export const mockData = {
   movements: [] as any[],
   orders: [] as any[],
   orderItems: [] as any[],
-  sales: [] as any[]
+  sales: [] as any[],
+  users: [
+    { id: 'usr1', name: 'Business Owner', email: 'owner@shoetracker.com', password: 'owner123', role: 'Admin' },
+    { id: 'usr2', name: 'Sales Associate', email: 'sales@shoetracker.com', password: 'sales123', role: 'Sales Staff' }
+  ]
 };
 
 // Fill initial movements and sales to make Dashboard look active and fully functional
@@ -173,6 +177,15 @@ export async function initializeDatabase() {
           quantity INT NOT NULL,
           unit_cost DECIMAL(10, 2) NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(255) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          role VARCHAR(50) NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
       `);
 
       // Seed database if empty
@@ -207,6 +220,16 @@ export async function initializeDatabase() {
           await pool.query('INSERT INTO order_items (id, order_id, variant_id, quantity, unit_cost) VALUES ($1, $2, $3, $4, $5)', [oi.id, oi.orderId, oi.variantId, oi.quantity, oi.unitCost]);
         }
         console.log('PostgreSQL database seeded successfully!');
+      }
+
+      // Independently seed users table if it's empty
+      const userCountRes = await pool.query('SELECT COUNT(*) FROM users');
+      if (parseInt(userCountRes.rows[0].count) === 0) {
+        console.log('Seeding users table...');
+        for (const u of mockData.users) {
+          await pool.query('INSERT INTO users (id, name, email, password, role) VALUES ($1, $2, $3, $4, $5)', [u.id, u.name, u.email, u.password, u.role]);
+        }
+        console.log('PostgreSQL users table seeded successfully!');
       }
 
       dbInstance = {

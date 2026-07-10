@@ -18,7 +18,8 @@ import {
   Boxes,
   RefreshCw,
   AlertCircle,
-  ShoppingCart
+  ShoppingCart,
+  LogOut
 } from 'lucide-react';
 
 import DashboardView from './components/DashboardView.tsx';
@@ -29,6 +30,7 @@ import SuppliersView from './components/SuppliersView.tsx';
 import OrdersView from './components/OrdersView.tsx';
 import SettingsView from './components/SettingsView.tsx';
 import SalesView from './components/SalesView.tsx';
+import LoginView from './components/LoginView.tsx';
 
 import { 
   Product, 
@@ -40,10 +42,40 @@ import {
   PurchaseOrder, 
   DashboardStats,
   OrderStatus,
-  Sale
+  Sale,
+  UserSession
 } from './types.ts';
 
 export default function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('shoetracker_theme');
+    if (saved === 'dark' || saved === 'light') {
+      return saved;
+    }
+    return 'light';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('shoetracker_theme', theme);
+  }, [theme]);
+
+  const [session, setSession] = useState<UserSession | null>(() => {
+    const saved = localStorage.getItem('shoetracker_session');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dbStatus, setDbStatus] = useState<{
     postgresConnected: boolean;
@@ -81,13 +113,27 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  const authedFetch = async (url: string, options: RequestInit = {}) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    } as any;
+    if (session?.user?.id) {
+      headers['x-user-id'] = session.user.id;
+    }
+    return fetch(url, {
+      ...options,
+      headers
+    });
+  };
+
   // ------------------------------------------
   // API FETCH FUNCTIONS
   // ------------------------------------------
   
   const fetchDbStatus = async () => {
     try {
-      const res = await fetch('/api/status');
+      const res = await authedFetch('/api/status');
       const data = await res.json();
       if (data.success) {
         setDbStatus({
@@ -105,7 +151,7 @@ export default function App() {
   const fetchStats = async () => {
     setStatsLoading(true);
     try {
-      const res = await fetch('/api/stats');
+      const res = await authedFetch('/api/stats');
       const data = await res.json();
       if (data.success) {
         setStats(data.data);
@@ -120,7 +166,7 @@ export default function App() {
   const fetchProducts = async () => {
     setProductsLoading(true);
     try {
-      const res = await fetch('/api/products');
+      const res = await authedFetch('/api/products');
       const data = await res.json();
       if (data.success) {
         setProducts(data.data);
@@ -134,7 +180,7 @@ export default function App() {
 
   const fetchBrands = async () => {
     try {
-      const res = await fetch('/api/brands');
+      const res = await authedFetch('/api/brands');
       const data = await res.json();
       if (data.success) {
         setBrands(data.data);
@@ -146,7 +192,7 @@ export default function App() {
 
   const fetchVariants = async () => {
     try {
-      const res = await fetch('/api/variants');
+      const res = await authedFetch('/api/variants');
       const data = await res.json();
       if (data.success) {
         setVariants(data.data);
@@ -159,7 +205,7 @@ export default function App() {
   const fetchWarehouses = async () => {
     setWarehousesLoading(true);
     try {
-      const res = await fetch('/api/warehouses');
+      const res = await authedFetch('/api/warehouses');
       const data = await res.json();
       if (data.success) {
         setWarehouses(data.data);
@@ -174,7 +220,7 @@ export default function App() {
   const fetchSuppliers = async () => {
     setSuppliersLoading(true);
     try {
-      const res = await fetch('/api/suppliers');
+      const res = await authedFetch('/api/suppliers');
       const data = await res.json();
       if (data.success) {
         setSuppliers(data.data);
@@ -189,7 +235,7 @@ export default function App() {
   const fetchMovements = async () => {
     setMovementsLoading(true);
     try {
-      const res = await fetch('/api/movements');
+      const res = await authedFetch('/api/movements');
       const data = await res.json();
       if (data.success) {
         setMovements(data.data);
@@ -204,7 +250,7 @@ export default function App() {
   const fetchOrders = async () => {
     setOrdersLoading(true);
     try {
-      const res = await fetch('/api/orders');
+      const res = await authedFetch('/api/orders');
       const data = await res.json();
       if (data.success) {
         setOrders(data.data);
@@ -219,7 +265,7 @@ export default function App() {
   const fetchSales = async () => {
     setSalesLoading(true);
     try {
-      const res = await fetch('/api/sales');
+      const res = await authedFetch('/api/sales');
       const data = await res.json();
       if (data.success) {
         setSales(data.data);
@@ -274,7 +320,7 @@ export default function App() {
   const handleDatabaseReconnect = async () => {
     setActionLoading(true);
     try {
-      const res = await fetch('/api/status/reconnect', { method: 'POST' });
+      const res = await authedFetch('/api/status/reconnect', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         await handleDataRefresh();
@@ -297,7 +343,7 @@ export default function App() {
 
   const handleCreateProduct = async (payload: any) => {
     try {
-      const res = await fetch('/api/products', {
+      const res = await authedFetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -316,7 +362,7 @@ export default function App() {
 
   const handleUpdateProduct = async (id: string, payload: any) => {
     try {
-      const res = await fetch(`/api/products/${id}`, {
+      const res = await authedFetch(`/api/products/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -333,7 +379,7 @@ export default function App() {
 
   const handleDeleteProduct = async (id: string) => {
     try {
-      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      const res = await authedFetch(`/api/products/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         triggerToast('Product deleted from catalog', 'success');
@@ -345,7 +391,7 @@ export default function App() {
 
   const handleCreateVariant = async (payload: any) => {
     try {
-      const res = await fetch('/api/variants', {
+      const res = await authedFetch('/api/variants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -362,7 +408,7 @@ export default function App() {
 
   const handleUpdateVariant = async (id: string, payload: any) => {
     try {
-      const res = await fetch(`/api/variants/${id}`, {
+      const res = await authedFetch(`/api/variants/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -379,7 +425,7 @@ export default function App() {
 
   const handleDeleteVariant = async (id: string) => {
     try {
-      const res = await fetch(`/api/variants/${id}`, { method: 'DELETE' });
+      const res = await authedFetch(`/api/variants/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         triggerToast('Variant SKU deleted.', 'success');
@@ -391,7 +437,7 @@ export default function App() {
 
   const handleCreateWarehouse = async (payload: any) => {
     try {
-      const res = await fetch('/api/warehouses', {
+      const res = await authedFetch('/api/warehouses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -408,7 +454,7 @@ export default function App() {
 
   const handleUpdateWarehouse = async (id: string, payload: any) => {
     try {
-      const res = await fetch(`/api/warehouses/${id}`, {
+      const res = await authedFetch(`/api/warehouses/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -425,7 +471,7 @@ export default function App() {
 
   const handleDeleteWarehouse = async (id: string) => {
     try {
-      const res = await fetch(`/api/warehouses/${id}`, { method: 'DELETE' });
+      const res = await authedFetch(`/api/warehouses/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         triggerToast('Facility deleted.', 'success');
@@ -437,7 +483,7 @@ export default function App() {
 
   const handleCreateSupplier = async (payload: any) => {
     try {
-      const res = await fetch('/api/suppliers', {
+      const res = await authedFetch('/api/suppliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -454,7 +500,7 @@ export default function App() {
 
   const handleUpdateSupplier = async (id: string, payload: any) => {
     try {
-      const res = await fetch(`/api/suppliers/${id}`, {
+      const res = await authedFetch(`/api/suppliers/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -471,7 +517,7 @@ export default function App() {
 
   const handleDeleteSupplier = async (id: string) => {
     try {
-      const res = await fetch(`/api/suppliers/${id}`, { method: 'DELETE' });
+      const res = await authedFetch(`/api/suppliers/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         triggerToast('Supplier profile removed.', 'success');
@@ -483,7 +529,7 @@ export default function App() {
 
   const handleCreateMovement = async (payload: any) => {
     try {
-      const res = await fetch('/api/movements', {
+      const res = await authedFetch('/api/movements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -500,7 +546,7 @@ export default function App() {
 
   const handleCreateOrder = async (payload: any) => {
     try {
-      const res = await fetch('/api/orders', {
+      const res = await authedFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -517,7 +563,7 @@ export default function App() {
 
   const handleUpdateOrderStatus = async (id: string, status: OrderStatus) => {
     try {
-      const res = await fetch(`/api/orders/${id}/status`, {
+      const res = await authedFetch(`/api/orders/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -532,8 +578,44 @@ export default function App() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('shoetracker_session');
+    setSession(null);
+    triggerToast('Logged out successfully', 'info');
+  };
+
+  const getPermittedTabs = () => {
+    if (!session) return [];
+    
+    const role = session.user.role;
+    if (role === 'Admin') {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: BarChart2 },
+        { id: 'products', label: 'Shoes & Sizes', icon: Package },
+        { id: 'movements', label: 'Stock Movements', icon: Sliders },
+        { id: 'warehouses', label: 'Shops', icon: WarehouseIcon },
+        { id: 'suppliers', label: 'Suppliers', icon: Building2 },
+        { id: 'orders', label: 'Supplier Orders', icon: FileText },
+        { id: 'sales', label: 'Sales & Profit', icon: ShoppingCart },
+        { id: 'settings', label: 'Settings', icon: SettingsIcon },
+      ];
+    } else {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: BarChart2 },
+        { id: 'products', label: 'Shoes & Sizes', icon: Package },
+        { id: 'movements', label: 'Stock Movements', icon: Sliders },
+        { id: 'sales', label: 'Sales & Profit', icon: ShoppingCart },
+      ];
+    }
+  };
+
   // Nav helper
   const handleTabChange = (tab: string) => {
+    const permitted = getPermittedTabs().map(t => t.id);
+    if (!permitted.includes(tab)) {
+      setActiveTab('dashboard');
+      return;
+    }
     setActiveTab(tab);
     // Refresh targeted tab data context
     if (tab === 'dashboard') fetchStats();
@@ -546,35 +628,38 @@ export default function App() {
     if (tab === 'settings') fetchDbStatus();
   };
 
+  if (!session) {
+    return (
+      <LoginView 
+        onLoginSuccess={(sess) => {
+          setSession(sess);
+          localStorage.setItem('shoetracker_session', JSON.stringify(sess));
+        }} 
+        triggerToast={triggerToast} 
+      />
+    );
+  }
+
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans transition-colors duration-200">
       
       {/* SIDEBAR NAVIGATION PANEL */}
-      <aside className="w-64 bg-white text-slate-600 flex flex-col justify-between border-r border-slate-200 shrink-0">
+      <aside className="w-64 bg-sidebar text-sidebar-foreground flex flex-col justify-between border-r border-sidebar-border shrink-0 transition-colors duration-200">
         <div>
           {/* Logo Branding */}
-          <div className="p-5 border-b border-slate-200 flex items-center space-x-3.5 bg-slate-50/50">
-            <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center font-black text-white text-base shadow-sm">
+          <div className="p-5 border-b border-sidebar-border flex items-center space-x-3.5 bg-sidebar/50">
+            <div className="w-9 h-9 bg-primary text-primary-foreground rounded-xl flex items-center justify-center font-black text-base shadow-sm">
               👟
             </div>
             <div>
-              <h1 className="font-extrabold text-sm tracking-tight text-slate-900 leading-tight">ShoeTracker</h1>
-              <p className="text-[10px] text-slate-500 font-bold tracking-wider uppercase mt-0.5">Stock Platform</p>
+              <h1 className="font-extrabold text-sm tracking-tight text-sidebar-foreground leading-tight">ShoeTracker</h1>
+              <p className="text-[10px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5">Stock Platform</p>
             </div>
           </div>
 
           {/* Nav Items */}
           <nav className="py-4 space-y-0.5">
-            {[
-              { id: 'dashboard', label: 'Dashboard', icon: BarChart2 },
-              { id: 'products', label: 'Shoes & Sizes', icon: Package },
-              { id: 'movements', label: 'Stock Movements', icon: Sliders },
-              { id: 'warehouses', label: 'Shops', icon: WarehouseIcon },
-              { id: 'suppliers', label: 'Suppliers', icon: Building2 },
-              { id: 'orders', label: 'Supplier Orders', icon: FileText },
-              { id: 'sales', label: 'Sales & Profit', icon: ShoppingCart },
-              { id: 'settings', label: 'Settings', icon: SettingsIcon },
-            ].map((tab) => {
+            {getPermittedTabs().map((tab) => {
               const Icon = tab.icon;
               const isSelected = activeTab === tab.id;
 
@@ -584,11 +669,11 @@ export default function App() {
                   onClick={() => handleTabChange(tab.id)}
                   className={`w-full flex items-center space-x-3 px-6 py-3 border-r-3 text-xs font-semibold tracking-wide transition-all text-left cursor-pointer ${
                     isSelected 
-                      ? 'bg-blue-50 text-blue-600 border-blue-600' 
-                      : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                      ? 'bg-sidebar-accent text-primary border-primary' 
+                      : 'border-transparent text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
                   }`}
                 >
-                  <Icon className={`w-4.5 h-4.5 shrink-0 ${isSelected ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <Icon className={`w-4.5 h-4.5 shrink-0 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -596,38 +681,36 @@ export default function App() {
           </nav>
         </div>
 
-        {/* Database Mode indicator & telemetry */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <span className={`w-2 h-2 rounded-full ${
-                dbStatus?.postgresConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-              }`} />
-              <span className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">
-                {dbStatus?.postgresConnected ? 'Supabase Live' : 'Demo Mode'}
-              </span>
+        {/* User profile card & Log Out */}
+        <div className="p-4 border-t border-sidebar-border bg-sidebar/50 flex items-center justify-between">
+          <div className="flex items-center space-x-2.5 truncate">
+            <div className="w-8 h-8 bg-primary/10 border border-primary/20 text-primary rounded-lg flex items-center justify-center font-black text-xs shrink-0">
+              {session?.user?.name?.charAt(0) || 'U'}
             </div>
-            <button 
-              onClick={handleDataRefresh} 
-              className="p-1.5 hover:bg-slate-200 text-slate-400 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
-              title="Sync All Core Data"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+            <div className="truncate">
+              <p className="text-[11px] font-black text-sidebar-foreground leading-tight truncate">{session?.user?.name || 'User'}</p>
+              <p className="text-[9px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5">{session?.user?.role || 'Guest'}</p>
+            </div>
           </div>
-          <p className="text-[10px] text-slate-400 mt-1.5 truncate">
-            {dbStatus?.postgresConnected ? 'Active cloud database' : 'Volatile memory backend'}
-          </p>
+          <button 
+            onClick={handleLogout}
+            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+            title="Log Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
+
+
       </aside>
 
       {/* WORKSPACE AREA */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 bg-background text-foreground">
         
         {/* Top Header Row */}
-        <header className="h-16 bg-white border-b border-slate-100 px-6 flex justify-between items-center shrink-0">
+        <header className="h-16 bg-card border-b border-border px-6 flex justify-between items-center shrink-0 transition-colors duration-200">
           <div>
-            <h2 className="text-base font-extrabold text-slate-800 uppercase tracking-wider">
+            <h2 className="text-base font-extrabold text-foreground uppercase tracking-wider">
               {activeTab === 'dashboard' ? 'Dashboard Overview' :
                activeTab === 'products' ? 'Shoes & Sizes' :
                activeTab === 'movements' ? 'Stock Movements' :
@@ -644,7 +727,7 @@ export default function App() {
             {!dbStatus?.postgresConnected && (
               <span 
                 onClick={() => handleTabChange('settings')}
-                className="text-[10px] bg-amber-50 text-amber-600 font-bold px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer border border-amber-100 hover:bg-amber-100 transition-colors"
+                className="text-[10px] bg-amber-500/10 text-amber-500 font-bold px-3 py-1 rounded-full flex items-center gap-1 cursor-pointer border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
               >
                 <AlertCircle className="w-3.5 h-3.5" /> Connect Supabase Database
               </span>
@@ -652,7 +735,7 @@ export default function App() {
             
             <button 
               onClick={handleDataRefresh}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-xl transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 border border-border hover:bg-muted text-foreground font-bold text-xs rounded-xl transition-all cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Sync Data
             </button>
@@ -683,6 +766,7 @@ export default function App() {
               onCreateVariant={handleCreateVariant}
               onUpdateVariant={handleUpdateVariant}
               onDeleteVariant={handleDeleteVariant}
+              userPermissions={session?.permissions || []}
             />
           )}
 
@@ -737,6 +821,9 @@ export default function App() {
               loading={actionLoading}
               onReconnect={handleDatabaseReconnect}
               triggerToast={triggerToast}
+              session={session}
+              currentTheme={theme}
+              onThemeToggle={setTheme}
             />
           )}
 
@@ -748,7 +835,7 @@ export default function App() {
               loading={salesLoading}
               onRefresh={fetchSales}
               onRecordSale={async (sData) => {
-                const response = await fetch('/api/sales', {
+                const response = await authedFetch('/api/sales', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(sData)
